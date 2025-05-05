@@ -1,0 +1,26 @@
+---
+title: Required Hardware
+weight: 30
+aliases: /amd-rag-chat-qna/amd-rag-chat-qna-required-hardware/
+---
+
+:toc:
+:imagesdir: /images
+:_content-type: ASSEMBLY
+include::modules/comm-attributes.adoc[]
+
+== Required Hardware
+
+:_content-type: CONCEPT
+:imagesdir: ../../images
+
+[id="about-amd-instinct"]
+== AMD® Instinct®
+
+Generative AI is transforming the way enterprise customers operate. In fact, AI is quickly becoming a part of nearly every business process that it supports, from customer service to data analytics,
+and that deepening integration is only going to grow. However, AI is a relatively new workload, added to existing infrastructure and putting strain on current hardware configurations.
+
+If customers want to enjoy seamless AI experiences and productivity gains immediately and over the long-term, they need help evolving their IT infrastructure. That’s where AMD technologies come in,
+offering enterprises the performance and efficiency to operate existing workflows alongside the new possibilities that AI brings to the table.
+
+For more information, visit the link:https://www.amd.com/en/products/accelerators/instinct.html#overview[AMD Instinct] website.
