@@ -5,250 +5,307 @@ aliases: /amd-rag-chat-qna/amd-rag-chat-qna-getting-started/
 ---
 
 :toc:
-:imagesdir: /images
 :_content-type: ASSEMBLY
 include::modules/comm-attributes.adoc[]
 
 [id="deploying-amdqna-pattern"]
 = Deploying the {amdqna-pattern}
 
-.Prerequisites
+=== Prerequisites
 
-* An {ocp} (4.16-4.18) cluster
- ** If you do not have a running Red Hat OpenShift cluster, you can start one on a public or private cloud by using the https://console.redhat.com/[Red Hat Hybrid Cloud console] and select *Services \-> Containers \-> Create cluster*.
- ** The cluster must have a dynamic `StorageClass` to provision `PersistentVolumes`. CephFS should be set as a default Storage Class - https://docs.openshift.com/container-platform/4.18/storage/container_storage_interface/persistent-storage-csi-sc-manage.html#change-default-storage-class_persistent-storage-csi-sc-manage[Setup Guide]
+* An {ocp} (4.16-4.18) cluster. If you do not have a running Red Hat OpenShift cluster, you can start one on a public or private cloud by visiting https://console.redhat.com/[Red Hat Hybrid Cloud Console].
+ ** select *Services \-> Containers \-> Create cluster*.
  ** link:../../amd-rag-chat-qna/amd-rag-chat-qna-required-hardware[Required hardware].
-* {ocp} Cluster must have a configured Image Registry - https://docs.openshift.com/container-platform/4.18/registry/configuring_registry_storage/configuring-registry-storage-rhodf.html[Setup Guide]
-* A GitHub account and a token for it with repositories permissions, to read from and write to your forks.
-* A HuggingFace account and User Access token, which allows to download AI models. More about User Access token can be found on https://huggingface.co/docs/hub/en/security-tokens[official HuggingFace website]
-* https://validatedpatterns.io/learn/quickstart/[Install the tooling dependencies].
-* https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions[Install AWS CLI tool] to check status of S3 bucket (RGW storage).
+* {ocp} Cluster must have a configured https://docs.redhat.com/en/documentation/openshift_container_platform/4.18/html/registry/setting-up-and-configuring-the-registry[Image Registry].
+* A GitHub account and https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens[Personal Access Token] with permissions to read/write to forks.
+* A HuggingFace account and https://huggingface.co/docs/hub/en/security-tokens[User Access Token], which allows to download AI models.
+* Contact information https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct[shared] in order to access Meta's `Llama-3.1-8B-Instruct` model with your HuggingFace account.
+* Access to an S3 or Minio bucket for model storage purposes.
+ ** This guide does not go into details regarding setup, please refer to https://min.io/docs/minio/kubernetes/upstream/operations/installation.html[Minio] or
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html[S3] documentation for further information on bucket setup & configuration.
+* Install pattern https://validatedpatterns.io/learn/quickstart/[tooling dependencies].
 
- https://console.redhat.com/openshift/create[Red Hat Hybrid Cloud Console].
 
-.Procedure
+=== Model Setup
 
-. Fork the https://github.com/validatedpatterns-sandbox/qna-chat-amd[qna-chat-amd] repository on GitHub.
-. Clone the forked copy of this repository.
+* If you prefer to utilize tools provided with this project for preparation of the prerequisite model, we'll first <<install_rhoai,install OpenShift AI>> in order to leverage a workbench for notebook access.
 +
-[source,terminal]
-----
-git clone git@github.com:your-username/qna-chat-amd.git
-----
+[NOTE]
+====
+If you are familiar with the steps necessary for downloading the `Llama-3.1-8B-Instruct` model & copying to a Minio/S3 bucket, you may do so & proceed to <<clone_pattern_code,Clone Code Repository>> below. OpenShift AI will be
+installed later during pattern execution.
 
-. Create a local copy of the secret values file that can safely include credentials. Run the following commands:
-+
-[source,terminal]
-----
-cp values-secret.yaml.template ~/values-secret-qna-chat-amd.yaml
-----
+If you prefer to run the provided notebooks in another environment, you may do so & skip to <<notebook_model_prep, Upload Model using Red Hat OpenShift AI>> below for further instructions. OpenShift AI will be installed later during pattern execution.
+====
 
-. Update the newly create secrets file with values for your HuggingFace token, LLM inference endpoint, and correlating certificate chain, as necessary for your desired deployment pattern.
+Install Red Hat OpenShift AI:: [[install_rhoai]]
+
+If not already installed on the cluster, follow this https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/2.13/html-single/installing_and_uninstalling_openshift_ai_self-managed/index#installing-and-deploying-openshift-ai_install[link]
+to install Red Hat OpenShift AI. Follow the given steps to deploy the model for this article:
+
+* Open up Red Hat OpenShift AI by selecting it from the OpenShift Application Launcher. This will open up Red Hat OpenShift AI in a new tab.
+* In the Red Hat OpenShift AI window, select Data Science projects in the sidebar and click on the Create project button.
+* Name the new project `chatqna-llm`. +
+
+[start=0]
+Create Connection::
+
+Follow the steps given below to create a Connection that will be used by the init-container to fetch the model uploaded in next step when deploying the mode for inferencing:
+
+* Click on the Create connection button in the Connections tab in your newly created project
+* Select `S3 compatible object storage - v1` in the Connection type dropdown
 +
-[source,terminal]
+image::/images/qna-chat-amd/rhoai-create-connection.png[Red Hat OpenShift AI - Create Connection - Connection type, 60%, 60%]
++
+* Use the following values for this data connection:
+** Connection name: `model-store`
+** Connection description: `Connection that points to the model store` (_you can provide any relevant description here_)
+** Access key: MinIO username if using MinIO, else use AWS credentials
+** Secret key: MinIO password if using MinIO, else use AWS credentials
+** Endpoint: minio-api route location, from OCP cluster, if using MinIO, else use AWS S3 endpoint that is in the format of `https://s3.<REGION>.amazonaws.com`
+** Region: `us-east-1` if using MinIO, otherwise use the correct AWS region
+** Bucket: `models`
++
+--
+*** This bucket will be created by the Jupyter notebook, if it does not exist, when uploading the model
+*** If using AWS S3 and the bucket does not exist, make sure correct permissions are assigned to the IAM user to be able to create the bucket
++
+{empty} +
+--
++
+image::/images/qna-chat-amd/rhoai-create-connection-2.png[Red Hat OpenShift AI - Create connection]
+
+[start=0]
+Create Workbench::
+
+To upload the model that is needed for this article, you need to create a workbench first. In the chatqna-llm data science project, create a new workbench by clicking the Create workbench button in the Workbenches tab.
+
+* Use the following values to create the workbench:
+** Name: `chatqna`
+** Image selection: `ROCm-PyTorch`
+** Version selection: `2025.1`
+** Container size: `Medium`
+** Accelerator: `AMD`
+** Cluster storage: Make sure the storage is at least 50GB
+** Connection: Click on Attach existing connections button and attach the connection named model-store created in the previous step (Figure 4). This will pass on the connection values to the workbench when it is started, which will be used to upload the model.
+* Create the workbench by clicking on the `Create workbench` button. This workbench will be started and will move to `Running` status soon.
++
+image::/images/qna-chat-amd/rhoai-create-workbench.png[Red Hat OpenShift AI - Create Workbench - Attach existing connections]
+
+=== Upload Model using Red Hat OpenShift AI [[notebook_model_prep]]
+
+To serve the model, we will need to first download the model using the workbench created in the previous step as well as upload it to either MinIO or AWS S3, using the connection named model-store created in one of the previous steps. Follow the steps given in this section to serve the model.
+
+Open Workbench::
+
+Open workbench named `chatqna` by following these steps:
+* Once `chatqna` workbench is in `Running` status, open the workbench by clicking on its name, in `Workbenches` tab
+* The workbench will open up in a new tab
+** When the workbench is opened for the first time, you will be shown an _Authorize Access page_*
+** Click `Allow selected permissions` button in this page
+
+Clone Code Repository:: [[clone_pattern_code]]
+
+Now that the workbench is created and running, follow these steps to setup the project:
+* In the open workbench, click on the `Terminal` icon in the `Launcher` tab.
+* Clone the following repository in the Terminal by running the following command:
+
+    git clone https://github.com/validatedpatterns-sandbox/qna-chat-amd.git
+
+Run Jupyter notebook::
+
+The notebook mentioned in this section is used to download the `meta-llama/Llama-3.1-8B-Instruct` model and upload it to either MinIO or AWS S3.
+* Once the repository is cloned, select the folder where you cloned the repository (in the sidebar) and open `scripts/model-setup/upload-model.ipynb` jupyter notebook
+* Run this notebook by running each cell one by one
+** When prompted for a HuggingFace token, provide the prerequisite User Access Token and click `Login`
++
+image::/images/qna-chat-amd/rhoai-upload-model.png[Red Hat OpenShift AI - Run Jupyter notebook - Hugging Face token prompt, 50%, 50%]
++
+** When the notebook successfully runs, llama model should have been uploaded to either MinIO or AWS S3 under Llama-3.1-8B-Instruct directory in models bucket
++
+[NOTE]
+====
+By default, this notebook will upload the model to MinIO. To choose AWS S3, modify the last cell in the notebook by changing the value of XFER_LOCATION to AWS as shown below:
 ----
-vi ~/values-secret-qna-chat-amd.yaml
+    XFER_LOCATION = 'MINIO'  <= current value
+    XFER_LOCATION = 'AWS'    <= modified to upload to AWS S3
 ----
+====
+
+=== Deploy Model via Red Hat OpenShift AI
+
+Once the initial notebook has run successfully and the model is uploaded, you can deploy the model by following these steps:
+
+In the chatqna-llm data science project, select Models tab and click on Deploy model button and fill in the following fields as shown below:
+
+* Model name: `llama-31b`
+* Serving runtime: `vLLM AMD GPU ServingRuntime for KServe`
+* Model framework: `vLLM`
+* Deployment mode: `Advanced`
+* Model server size: `Small`
+* Accelerator: `AMD`
+* Model route: Enable `Make deployed models available through an external route` checkbox
+* Source Model location: Select `Existing connection` option
++
+--
+** Name: `model-store` (this is the name we used when we created the connection in `Create Connection` step)
+** Path: `Llama-3.1-8B-Instruct`
+*** Location where the model was copied to in the previous step
+--
++
+Click on Deploy to deploy this model. Once the model is successfully deployed, copy the inference endpoint to use it in the ChatQnA application (it will take a few minutes to deploy the model).
 +
 [WARNING]
 ====
-Do not commit the new secrets file! Doing so will expose personal credentials on a publicly available GitHub repository.
+Make sure the model name is set to `llama-31b` as this is the value used in the deployment of llm micro-service that invokes the inference endpoint.
 ====
 
+=== Deploy ChatQnA application
+
+This section provides details on installing the ChatQnA application as well as verifying the deployment and configuration by querying the application.
+
+Install ChatQnA app::
+
+Once all the prerequisites are met, install the ChatQnA application
+* Clone the repository by running the following commands:
 +
-. (Optional) If target OCP cluster(s) reside behind a proxy, `values-global.yaml` should be updated similarly & committed to your single-source-of-truth repository as well.
+    git clone https://github.com/validatedpatterns-sandbox/qna-chat-amd.git
+    cd qna-chat-amd
 +
-[WARNING]
+* Configure secrets for Hugging Face and inference endpoint
++
+    cp values-secret.yaml.template `~/values-secret-qna-chat-amd.yaml`
++
+* Modify the `value` field in `~/values-secret-qna-chat-amd.yaml` file
++
+----
+    secrets:
+    - name: huggingface
+      fields:
+      - name: token
+      value: null  <- CHANGE THIS TO YOUR HUGGING_FACE TOKEN
+      vaultPolicy: validatePatternDefaultPolicy
+
+    - name: rhoai_model
+      fields:
+      - name: inference_endpoint
+      value: null  <- CHANGE THIS TO YOUR MODEL'S INFERENCE ENDPOINT
+----
++
+* Deploy the application
++
+    ./pattern.sh make install
++
+The above command will install the application by deploying the ChatQnA megaservice along with the following required microservices:
+
+** Dataprep
+** LLM text generation
+** Retriever
+** Hugging Face Text Embedding Inference
+*** Embedding service
+*** Reranker service
+** ChatQnA backend
+** ChatQnA UI
++
+[NOTE]
 ====
-If the cluster is behind proxy remember to change proxy values of related fields in `values-global.yaml` file to appropriate ones.
+Processes for the build and installation of all the required services can take some time to complete. To monitor progress via the ArgoCD application dashboard, follow these steps:
+
+* Open ArgoCD dashboard, in a browser, using the URI returned
+----
+    echo https://$(oc get route hub-gitops-server -n qna-chat-amd-hub -o jsonpath="{.spec.host}")
+----
+* Get the password
+----
+    echo $(oc get secret hub-gitops-cluster -n qna-chat-amd-hub -o jsonpath="{.data['admin\.password']}" | base64 -d)
+----
+* Login to the ArgoCD dashboard
+** Username: `admin`
+** Password: _password from the previous step_
 ====
 
-[id="deploying-cluster-using-patternsh-file"]
-== Deploying the cluster by using the pattern.sh file
+Verify ChatQnA app::
 
-To deploy the cluster by using the `pattern.sh` file, complete the following steps:
+Once the application is installed, we can add the knowledge base using a PDF and then query against that data by following these steps:
 
-. Login to your cluster by running the following command:
+* Run the following command to get the ChatQnA UI URI:
 +
-[source,terminal]
-----
- oc login
-----
+    echo https://$(oc get route chatqna-ui-secure -n amd-llm -o jsonpath="{.spec.host}")
 +
-Optional: Set the `KUBECONFIG` variable for the `kubeconfig` file path:
-+
-[source,terminal]
-----
- export KUBECONFIG=~/<path_to_kubeconfig>
-----
+* Open ChatQnA UI, in a browser, by using the URI returned from above command
 
-. Deploy the pattern to your cluster. Run the following command:
-+
-[source,terminal]
-----
- ./pattern.sh make install
-----
+Query ChatQnA without RAG::
 
-. In the beginning of installation there should be prompt to enter HuggingFace token, looking like this:
+* Type the following query at the prompt:
 +
-[source,terminal]
-----
-Insert HuggingFace Token:
-----
+    What is the revenue of Nike in 2023?
 +
-[WARNING]
-====
-Validated Pattern can take a while to be fully installed as it requires couple of reboots to apply MachineConfigs for worker nodes.
-====
 +
+Since we have not yet provided any external knowledge base regarding the above query to the application, it does not the correct answer to this query and returns a generic response:
++
+image::/images/qna-chat-amd/chatqna-ui-no-rag.png[ChatQnA UI - response without RAG,40%,40%]
 
-As part of this pattern, HashiCorp Vault has been installed. Refer to the section on https://validatedpatterns.io/secrets/vault/[Vault].
+Query ChatQnA with RAG - add external knowledge base::
 
-[id="pattern-verification"]
-== Verification
-
-. Verify that the Operators have been installed.
- .. To verify, in the OpenShift Container Platform web console, navigate to *Operators → Installed Operators* page.
- .. Check that the Operators are installed in the `openshift-operators` namespace and its status is `Succeeded`.
-. Verify that S3 bucket was created successfully. Run following commands:
+In the ChatQnA UI, follow the steps given below to add an external knowledge base (Nike PDF) to perform the above query using RAG:
+* Click on the upload icon in the top right corner
 +
-[source,terminal]
+image::/images/qna-chat-amd/chatqna-upload-icon.jpeg[ChatQnA UI - upload icon,40%,40%]
++
+* Click on Choose File button and select `nke-10k-2023.pdf` from _scripts_ directory. When you select the pdf and close the dialog box, the upload will start automatically.
++
+image::/images/qna-chat-amd/chatqna-upload-file.jpeg[ChatQnA UI - Upload File,40%,40%]
++
+* Allow a few minutes for the file to be ingested and processed, and uploaded to the Redis vector database
+* Refresh the page after a few minutes to verify the file has been uploaded
+* Type the following query at the prompt:
++
 ----
-export AWS_ACCESS_KEY_ID=$(oc -n openshift-storage get secret s3-secret-bck -ojsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
-export AWS_SECRET_ACCESS_KEY=$(oc -n openshift-storage get secret s3-secret-bck -ojsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
-export CEPH_RGW_ENDPOINT=http://$(oc -n openshift-storage get route s3-rgw -ojsonpath='{.spec.host}')
-aws --endpoint ${CEPH_RGW_ENDPOINT} s3api list-buckets
+What is the revenue of Nike inc in 2023?
 ----
 +
-Expected response should show that bucket named `model-bucket` exists:
+The response for this query makes use of the Nike knowledge base, added in previous step, and is shown in the figure below:
 +
-[source,terminal]
-----
-{
-    "Buckets": [
-        {
-            "Name": "model-bucket",
-            "CreationDate": "2024-06-27T08:44:09.451000+00:00"
-        }
-    ],
-    "Owner": {
-        "DisplayName": "ocs-storagecluster",
-        "ID": "ocs-storagecluster-cephobjectstoreuser"
-    }
-}
-----
+image::/images/qna-chat-amd/chatqna-request-response.png[ChatQnA UI - request and response,50%,50%]
++
+Query ChatQnA - remove external knowledge base::
 
-. Verify that MachineConfigPool is ready. To check the status run following command:
-+
-[source,terminal]
-----
-oc get mcp
-----
-+
-. Verify that all applications are healthy and synchronized. Under the project `amd-rag-chat-qna` click the URL for the `hub` gitops `server`.
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-argocd.png[AMD RAG Chat QnA GitOps Hub]
-TODO REPLACE IMAGE ^::
-+ foo
+Follow the steps given in this section to remove the external knowledge base that was added to the app:
 
-[id="setup-rhoai"]
-== Setup Red Hat OpenShift AI
-
-After all components have been properly deployed, user can proceed to set up Red Hat OpenShift AI. Two steps are needed:
-
-. Upload of AI model to S3 bucket (RGW storage)
-. Deployment of vLLM with ROCm integration
-
-[id="setup-rhoai-ai-model"]
-=== Upload AI model
-
-. First step is to go to `RHOAI dashboard/Data Science Projects` tab and select `gaudi-llm` project (If the `gaudi-llm` project is missing user should check if app is ready in ArgoCD dashboard):
+* Click on the upload icon in the top right corner
+* Move your cursor on top of the file in the Data Source section and click on the trashcan icon that pops up in the top right corner of the file icon.
+* Select `Yes, I'm sure` when prompted with `"Confirm file deletion?"` dialog
 +
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-choose-project.png[Select RHOAI project]
+image::/images/qna-chat-amd/chatqna-delete-file.png[ChatQnA UI - delete knowledge base,40%,40%]
++
 
-. Go to `Workbenches` tab and click `Create workbench`:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-create-workbench.png[Create RHOAI workbench]
+Query ChatQnA - general questions::
 
-. Fill the input form following images below:
+* When the knowledge base is not added to the app, you can also use the application to ask general questions, such as:
+** Tell me more about Red Hat
+** What services does red hat provide?
+** What is Deep Learning?
+** What is a Neural Network?
 +
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-deploy-notebook-1.png[Deploy Jupyter notebook 1]
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-deploy-notebook-2.png[Deploy Jupyter notebook 2]
+image::/images/qna-chat-amd/chatqna-long-response.png[ChatQnA UI - response for general questions,50%,50%]
 
-. After workbench is created go to this Jupyter notebook dashboard and upload Jupyter notebook file `/download-model.ipynb` to the file explorer so it looks like this:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-notebook-view.png[Jupyter notebook view]
+=== Wrap Up
 
-. When `download-model` is uploaded, run notebook's all commands. After notebook is executed, model should be uploaded to S3 bucket. To check if model is present please run following commands:
-+
-[source,terminal]
-----
-export AWS_ACCESS_KEY_ID=$(oc -n openshift-storage get secret s3-secret-bck -ojsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
-export AWS_SECRET_ACCESS_KEY=$(oc -n openshift-storage get secret s3-secret-bck -ojsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
-export CEPH_RGW_ENDPOINT=http://$(oc -n openshift-storage get route s3-rgw -ojsonpath='{.spec.host}')
-aws --endpoint ${CEPH_RGW_ENDPOINT} s3 ls model-bucket/models/
-----
-+
-Response should show that model directory is present.
+In this article, we deployed Open Platform for Enterprise AI’s ChatQnA megaservice in Red Hat OpenShift Container Platform using Red Hat OpenShift AI and AMD hardware acceleration.
 
+The ChatQnA application makes use of OPEA’s microservices to return RAG responses using external knowledge base (Nike pdf) as well as invoke Llama LLM when there is no external knowledge base present.
 
-[id="setup-rhoai-tgi"]
-=== Deploy TGI
+Installing and setting up the application was made easy with the use of a Validated Pattern that in turn uses ArgoCD for the CI/CD pipeline to deploy various components of the application as well as to keep them in sync with the git repository in case of any config changes.
 
-. First step is to go to `RHOAI dashboard/Data Science Projects` tab and select `gaudi-llm` project:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-choose-project.png[Select RHOAI project]
+Follow the links in the references section to learn more about the various technologies used in this article.
 
-. Now select `Data connections` tab and click `Add data connection`:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-add-data-connection.png[Add Data connection]
+=== References
 
-. There should appear form `Add data connection` with couple of inputs. Form should be looking similar to this:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-data-connection-details.png[Complete Data connection details]
-+
-.. To get value for `Access key` run command:
-+
-[source,terminal]
-----
-oc -n openshift-storage get secret s3-secret-bck -ojsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d
-----
-+
-.. To get value for `Secret key` run command:
-+
-[source,terminal]
-----
-oc -n openshift-storage get secret s3-secret-bck -ojsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d
-----
-+
-.. To get value for `Endpoint` run command:
-+
-[source,terminal]
-----
-echo "http://$(oc -n openshift-storage get route s3-rgw -ojsonpath='{.spec.host}')"
-----
-
-. Next step is to go to tab `Models` and click `Deploy model` in `Single-model serving platform` section:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-create-single-model-serving.png[Create Single Model Serving]
-
-. There should appear form `Deploy model`. Fill all the inputs like in following images and then click `Deploy` button:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-deploy-model-1.png[Deploy model 1]
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-deploy-model-2.png[Deploy model 2]
-
-. If everything is setup correctly go to tab `Models` again to check status of TGI. It should be looking like this:
-+
-image::/images/gaudi-rag-chat-qna/gaudi-rag-chat-qna-tgi-status.png[Status of TGI]
-
-[id="start-rag-chat-qna-demo"]
-== RAG Chat demo
-
-After whole setup is complete demo application is ready to use. Chat QnA UI address can be obtained by running following command: 
-
-[source,terminal]
-----
-echo "http://$(oc -n gaudi-llm get route chatqna-gaudi-ui-server -ojsonpath='{.spec.host}')"
-----
-
+* https://github.com/validatedpatterns-sandbox/qna-chat-amd.git[Config repository]
+* https://www.redhat.com/en/products/ai/openshift-ai[Red Hat OpenShift AI]
+* https://www.redhat.com/en/technologies/cloud-computing/openshift/container-platform[Red Hat OpenShift Container Platform]
+* https://validatedpatterns.io/[Validated Patterns]
+* https://opea.dev/[Open Platform for Enterprise AI (OPEA)]
+** https://github.com/opea-project/GenAIComps[Various microservices]
+** https://github.com/opea-project/GenAIExamples/tree/main/ChatQnA[ChatQnA application]
+* https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct[Hugging Face Llama-3.1-8B-Instruct model]

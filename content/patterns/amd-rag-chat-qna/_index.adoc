@@ -1,8 +1,9 @@
 ---
 title: OPEA Chat QnA accelerated with AMD Instinct
 date: 2025-05-01
+tier: sandbox
 validated: false
-summary: This pattern helps you deploy a stack enabling AMD Instinct Accelerator alongside OPEA's Chat QnA RAG application
+summary: This pattern aids with deployment of OPEA's Chat QnA RAG application, accelerated with AMD Instinct hardware.
 rh_products:
 - Red Hat OpenShift Container Platform
 - Red Hat OpenShift Data Foundation
@@ -48,8 +49,8 @@ Key Features::
 [id="about-solution"]
 == About the solution
 
-The following solution integrates the aforementioned https://github.com/opea-project/GenAIExamples/tree/main/ChatQnA[OPEA ChatQnA example app] atop the http://localhost:1313/patterns/multicloud-gitops/[Multicloud GitOps] Validated Pattern to encapsulate every defined component as a microservice
-with easily trackable status via OpenShift GitOps dashboard:
+The following solution integrates the https://github.com/opea-project/GenAIExamples/tree/main/ChatQnA[OPEA ChatQnA example app] with the http://localhost:1313/patterns/multicloud-gitops/[Multicloud GitOps] Validated Pattern to encapsulate every defined component as an
+easily trackable resource via OpenShift GitOps dashboard:
 
 Components::
 * AI/ML Services
@@ -107,7 +108,7 @@ Red Hat® OpenShift® Serverless simplifies the development of hybrid cloud appl
 https://www.redhat.com/en/technologies/cloud-computing/openshift/what-is-openshift-service-mesh[Red Hat OpenShift Service Mesh]::
 Red Hat® OpenShift® Service Mesh provides a uniform way to connect, manage, and observe microservices-based applications. It provides behavioral insight into—and control of—the networked microservices in your service mesh.
 
-Hashicorp Vault::
+https://catalog.redhat.com/software/container-stacks/detail/61954b7020da7eae27db0e2a[Hashicorp Vault]::
 Provides a secure centralized store for dynamic infrastructure and applications across clusters, including over low-trust networks between clouds and data centers.
 
 https://github.com/opea-project[OPEA]::
